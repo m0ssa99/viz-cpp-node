@@ -3346,12 +3346,19 @@ void dlt_p2p_node::block_validation_timeout() {
 void dlt_p2p_node::periodic_task() {
     
      // Cleanup fibers amânate din catch blocks (Windows fiber safety)
-    if (!_dead_fibers.empty()) {
-        for (auto& f : _dead_fibers) {
-            try { if (f.valid()) f.cancel_and_wait(__FUNCTION__); } catch (...) {}
-        }
-        _dead_fibers.clear();
+     if (!_dead_fibers.empty()) {
+    std::vector<fc::future<void>> to_clean;
+    to_clean.swap(_dead_fibers);
+    for (auto& f : to_clean) {
+        try {
+            // Nu apela ready() — poate crapa dacă promise e distrus
+            // cancel_and_wait are acum garda valid() după fix-ul din future.hpp
+            f.cancel_and_wait(__FUNCTION__);
+        } catch (...) {}
+        // Eliberează explicit promise-ul imediat după
+        f = fc::future<void>();
     }
+}
 
     // Non-DB-access housekeeping always runs.
     periodic_reconnect_check();
