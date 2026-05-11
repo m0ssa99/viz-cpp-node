@@ -22,7 +22,7 @@
 #include <graphene/plugins/snapshot/plugin.hpp>
 
 #include <graphene/plugins/witness_guard/witness_guard.hpp>
-
+#include <graphene/plugins/witness_watchdog/witness_watchdog.hpp>
 #include <fc/interprocess/signals.hpp>
 #include <fc/log/console_appender.hpp>
 #include <fc/log/json_console_appender.hpp>
@@ -73,6 +73,7 @@ namespace graphene {
             appbase::app().register_plugin<graphene::plugins::custom_protocol_api::custom_protocol_api_plugin>();
             appbase::app().register_plugin<graphene::plugins::snapshot::snapshot_plugin>();
             appbase::app().register_plugin<graphene::plugins::witness_guard::witness_guard_plugin>();
+            appbase::app().register_plugin<graphene::plugins::witness_watchdog::witness_watchdog_plugin>();
             ///plugins
         };
     }

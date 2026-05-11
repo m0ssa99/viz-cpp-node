@@ -187,11 +187,12 @@ void dlt_p2p_node::close() {
 
 // ── Connection management ────────────────────────────────────────────
 
-// ── Per-IP dedup: find any existing active connection from the same IP ─
+// ── Per-Endpoint dedup: find any existing active connection from the same IP:Port ─
 dlt_p2p_node::peer_id dlt_p2p_node::find_active_peer_by_ip(const fc::ip::address& addr) const {
+    // Note: addr argument is kept for compatibility, but we should ideally check endpoint.
     for (const auto& item : _peer_states) {
         const auto& state = item.second;
-        if (state.endpoint.get_address() == addr &&
+        if (state.endpoint.get_address() == addr && 
             (state.lifecycle_state == DLT_PEER_LIFECYCLE_CONNECTING ||
              state.lifecycle_state == DLT_PEER_LIFECYCLE_HANDSHAKING ||
              state.lifecycle_state == DLT_PEER_LIFECYCLE_SYNCING ||
@@ -3311,15 +3312,21 @@ void dlt_p2p_node::block_validation_timeout() {
 // ── Periodic task ────────────────────────────────────────────────────
 
 void dlt_p2p_node::periodic_task() {
-    
-     // Cleanup fibers amânate din catch blocks (Windows fiber safety)
-    if (!_dead_fibers.empty()) {
-        for (auto& f : _dead_fibers) {
-            try { if (f.valid()) f.cancel_and_wait(__FUNCTION__); } catch (...) {}
-        }
-        _dead_fibers.clear();
-    }
 
+     // Cleanup fibers amânate din catch blocks (Windows fiber safety)
+   if (!_dead_fibers.empty()) {
+    std::vector<fc::future<void>> to_clean;
+    to_clean.swap(_dead_fibers);
+    for (auto& f : to_clean) {
+        try {
+            // Nu apela ready() — poate crapa dacă promise e distrus
+            // cancel_and_wait are acum garda valid() după fix-ul din future.hpp
+            f.cancel_and_wait(__FUNCTION__);
+        } catch (...) {}
+        // Eliberează explicit promise-ul imediat după
+        f = fc::future<void>();
+    }
+}
     // Non-DB-access housekeeping always runs.
     periodic_reconnect_check();
     periodic_lifecycle_timeout_check();

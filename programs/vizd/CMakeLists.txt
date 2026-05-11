@@ -37,6 +37,7 @@ target_link_libraries(
         graphene::custom_protocol_api
         graphene::snapshot
         graphene::witness_guard
+        graphene::witness_watchdog
         graphene_protocol
         fc
         ${CMAKE_DL_LIBS}
