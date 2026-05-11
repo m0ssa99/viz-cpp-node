@@ -24,11 +24,12 @@ REM ===========================================================================
 setlocal enabledelayedexpansion
 
 REM --- Defaults ---
-if not defined VIZ_BUILD_TYPE set VIZ_BUILD_TYPE=Release
+if not defined VIZ_BUILD_TYPE set VIZ_BUILD_TYPE=Debug
 if not defined VIZ_LOW_MEMORY set VIZ_LOW_MEMORY=OFF
 if not defined VIZ_BUILD_TESTNET set VIZ_BUILD_TESTNET=OFF
-if not defined VIZ_FULL_STATIC set VIZ_FULL_STATIC=OFF
-
+if not defined VIZ_FULL_STATIC set VIZ_FULL_STATIC=ON
+set PATH=C:\msys64\usr\bin;C:\msys64\mingw64\bin;%PATH%
+set OPENSSL_ROOT_DIR=C:/msys64/mingw64
 REM --- Validate required environment variables ---
 if not defined BOOST_ROOT (
     echo ERROR: BOOST_ROOT is not set. Point it to your Boost installation.
@@ -65,7 +66,7 @@ if %ERRORLEVEL% neq 0 (
 
 REM --- Determine source directory (parent of this script's location) ---
 set SCRIPT_DIR=%~dp0
-set SOURCE_DIR=%SCRIPT_DIR%..
+set SOURCE_DIR=%SCRIPT_DIR%
 
 REM --- Display configuration ---
 echo.
@@ -82,22 +83,40 @@ echo  Source Dir:      %SOURCE_DIR%
 echo ============================================
 echo.
 
+if "%SOURCE_DIR:~-1%"=="\" set "SOURCE_DIR=%SOURCE_DIR:~0,-1%"
+
 REM --- Create build directory ---
-set BUILD_DIR=%SOURCE_DIR%\build
+set "BUILD_DIR=%SOURCE_DIR%\build"
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
 REM --- Configure ---
 echo [1/2] Configuring with CMake...
-cmake -S "%SOURCE_DIR%" -B "%BUILD_DIR%" ^
-    -G "MinGW Makefiles" ^
-    -DCMAKE_BUILD_TYPE=%VIZ_BUILD_TYPE% ^
-    -DBOOST_ROOT="%BOOST_ROOT%" ^
-    -DOPENSSL_ROOT_DIR="%OPENSSL_ROOT_DIR%" ^
-    -DLOW_MEMORY_NODE=%VIZ_LOW_MEMORY% ^
-    -DBUILD_TESTNET=%VIZ_BUILD_TESTNET% ^
-    -DBUILD_SHARED_LIBRARIES=OFF ^
-    -DFULL_STATIC_BUILD=%VIZ_FULL_STATIC% ^
-    %VIZ_CMAKE_EXTRA%
+
+set "CM=-S "%SOURCE_DIR%" -B "%BUILD_DIR%""
+set "CM=%CM% -G "MinGW Makefiles""
+set "CM=%CM% -DCMAKE_BUILD_TYPE=%VIZ_BUILD_TYPE%"
+set "CM=%CM% "-DBOOST_ROOT=%BOOST_ROOT%""
+set "CM=%CM% "-DOPENSSL_ROOT_DIR=%OPENSSL_ROOT_DIR%""
+set "CM=%CM% -DLOW_MEMORY_NODE=%VIZ_LOW_MEMORY%"
+set "CM=%CM% -DBUILD_TESTNET=%VIZ_BUILD_TESTNET%"
+set "CM=%CM% -DBUILD_SHARED_LIBRARIES=OFF"
+
+set "CM=%CM% "-DOPENSSL_ROOT_DIR=%OPENSSL_ROOT_DIR%""
+set "CM=%CM% -DOPENSSL_CRYPTO_LIBRARY=C:/msys64/mingw64/lib/libcrypto.a"
+set "CM=%CM% -DOPENSSL_SSL_LIBRARY=C:/msys64/mingw64/lib/libssl.a"
+set "CM=%CM% -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+set "CXX_FLAGS=-O2 -Wa,-mbig-obj -D_WIN32_WINNT=0x0601 -DBOOST_ALL_NO_LIB -DBOOST_ALL_STATIC_LINK"
+set "CM=%CM% "-DCMAKE_CXX_FLAGS=%CXX_FLAGS%""
+if "%VIZ_FULL_STATIC%"=="ON" (
+    set "CM=%CM% "-DCMAKE_EXE_LINKER_FLAGS=-static -static-libgcc -static-libstdc++""
+	set "CM=%CM% -DOPENSSL_CRYPTO_LIBRARY=C:/msys64/mingw64/lib/libcrypto.a"
+	set "CM=%CM% -DOPENSSL_SSL_LIBRARY=C:/msys64/mingw64/lib/libssl.a"
+)
+set "CM=%CM% -DBUILD_FC_TESTS=OFF"
+
+if defined VIZ_CMAKE_EXTRA set "CM=%CM% %VIZ_CMAKE_EXTRA%"
+
+cmake %CM%
 
 if %ERRORLEVEL% neq 0 (
     echo ERROR: CMake configuration failed.

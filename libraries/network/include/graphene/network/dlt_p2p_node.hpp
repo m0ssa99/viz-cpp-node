@@ -309,6 +309,8 @@ private:
     fc::thread*                     _thread = nullptr;
     bool                            _running = false;
     std::map<peer_id, fc::future<void>> _read_fibers;
+    // Dead fibers deferred for cleanup outside catch blocks (Windows fiber safety)
+    std::vector<fc::future<void>> _dead_fibers;
     fc::future<void>                _accept_fiber;
     fc::future<void>                _periodic_fiber;
 

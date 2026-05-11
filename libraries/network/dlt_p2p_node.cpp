@@ -341,7 +341,12 @@ void dlt_p2p_node::handle_disconnect(peer_id peer, const std::string& reason, bo
     // _peer_states, so state/it remain valid when we resume here.
     auto fiber_it = _read_fibers.find(peer);
     if (fiber_it != _read_fibers.end()) {
-        try { if (fiber_it->second.valid()) fiber_it->second.cancel_and_wait(__FUNCTION__); } catch (...) {}
+        if (std::current_exception() != std::exception_ptr()) {
+            // Suntem în catch block — amânăm cancel_and_wait pentru periodic_task
+            _dead_fibers.push_back(std::move(fiber_it->second));
+        } else {
+            try { if (fiber_it->second.valid()) fiber_it->second.cancel_and_wait(__FUNCTION__); } catch (...) {}
+        }
         _read_fibers.erase(fiber_it);
     }
 
@@ -3306,6 +3311,15 @@ void dlt_p2p_node::block_validation_timeout() {
 // ── Periodic task ────────────────────────────────────────────────────
 
 void dlt_p2p_node::periodic_task() {
+    
+     // Cleanup fibers amânate din catch blocks (Windows fiber safety)
+    if (!_dead_fibers.empty()) {
+        for (auto& f : _dead_fibers) {
+            try { if (f.valid()) f.cancel_and_wait(__FUNCTION__); } catch (...) {}
+        }
+        _dead_fibers.clear();
+    }
+
     // Non-DB-access housekeeping always runs.
     periodic_reconnect_check();
     periodic_lifecycle_timeout_check();
