@@ -710,6 +710,12 @@ make install_ssldirs
 > `/usr/bin/perl` is used, not the Windows one. You can verify with:
 > `perl -e 'print $^O'` — it must print `msys`, not `MSWin32`.
 
+Note: In some cases, OpenSSL searches for openssl.cnf directly in the root installation directory rather than in the ssl subdirectory. To prevent build or runtime issues, it is safer to copy the configuration file immediately after installation:
+
+```bash
+cp ./apps/openssl.cnf /c/OpenSSL/
+```
+
 ### Step 4 — Clone the repository
 
 ```bash
