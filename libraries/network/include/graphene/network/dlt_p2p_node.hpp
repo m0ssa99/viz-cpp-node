@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <atomic>
 #include <algorithm>
 
 namespace graphene {
@@ -78,6 +79,15 @@ public:
     virtual bool           is_tapos_block_known(uint32_t ref_block_num, uint32_t ref_block_prefix) const = 0;
     virtual bool           check_tapos_block_summary(uint32_t ref_block_num, uint32_t ref_block_prefix) const = 0;
     virtual void           resync_from_lib(bool force_emergency) = 0;
+
+    // Called on every SYNC→FORWARD transition so the chain plugin's
+    // currently_syncing flag is cleared.  P2P sets currently_syncing=true
+    // via call_accept_block(sync_mode=true) during bulk sync; without this
+    // call the flag stays true after sync ends until the next FORWARD-mode
+    // block arrives.  If our witnesses are the only remaining producers and
+    // are themselves blocked by is_syncing()→not_synced, that arrival never
+    // happens — causing indefinite silent production deadlock (p72: 570 s gap).
+    virtual void           clear_syncing() = 0;
 };
 
 /**
@@ -145,6 +155,14 @@ public:
     // blocks).  The witness plugin checks this to avoid producing
     // blocks that would conflict with the read lock or stale head.
     bool is_catching_up_after_pause() const { return _block_processing_paused || _catchup_after_pause; }
+
+    // Force-clear both pause-related flags.  Used by the
+    // witness watchdog recovery to unstick production when
+    // a snapshot/hot-reload pause failed to resume properly.
+    void clear_catchup_after_pause() {
+        _catchup_after_pause = false;
+        _block_processing_paused = false;
+    }
 
     // ── Called by plugin when a block is applied to chain ────────
     void on_block_applied(const signed_block& block, bool caused_fork_switch);
@@ -374,7 +392,8 @@ private:
     void                            emergency_peer_reset();
 
     // ── Block processing pause ───────────────────────────────────
-    bool                            _block_processing_paused = false;
+    // Atomic: written by snapshot/P2P thread, read by witness thread (th_0)
+    std::atomic<bool>               _block_processing_paused{false};
 
     // Serializes accept_block calls across per-peer FC fibers.  Two fibers
     // on the same OS thread can both call accept_block concurrently if one
@@ -402,7 +421,9 @@ private:
     // True while queued blocks are being applied or a gap still
     // exists after draining.  The witness plugin checks this via
     // is_catching_up_after_pause() to defer block production.
-    bool                            _catchup_after_pause = false;
+    // Atomic: written by snapshot/P2P thread and watchdog (th_0),
+    // read by witness production loop (th_0).
+    std::atomic<bool>               _catchup_after_pause{false};
 
     // ── Incoming IP blocklist ─────────────────────────────────────
     // IPs that sent oversized/malformed messages are blocked temporarily
