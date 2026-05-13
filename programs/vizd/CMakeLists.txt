@@ -39,6 +39,7 @@ target_link_libraries(
         graphene::witness_guard
         graphene_protocol
         fc
+		bcrypt
         ${CMAKE_DL_LIBS}
         ${PLATFORM_SPECIFIC_LIBS}
 )
