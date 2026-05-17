@@ -2737,25 +2737,32 @@ void snapshot_plugin::plugin_impl::accept_loop() {
         } catch (const fc::canceled_exception&) {
             break;
         } catch (const fc::exception& e) {
-            if (server_running) {
+            if (server_running) 
                 elog("Snapshot server: accept error: ${e}", ("e", e.to_detail_string()));
-                fc::usleep(fc::seconds(1));
-            }
+               // Fall through — sleep happens AFTER the catch block (see below).
+            // Calling fc::usleep inside a catch block triggers FC_ASSERT on Windows
+           // (ucrtbase SEH: current_exception must be null before yielding).
+
+            
         } catch (const std::exception& e) {
             // CRITICAL: Without this catch, any std::exception (e.g. std::bad_alloc
             // from map/vector operations) would kill the accept loop permanently.
             // After the loop dies, tcp_srv is still listening but nobody calls
             // accept() — clients get connection timeouts with no error in the log.
-            if (server_running) {
+            if (server_running) 
                 elog("Snapshot server: accept error (std::exception): ${e}", ("e", e.what()));
-                fc::usleep(fc::seconds(1));
-            }
+                // Fall through — sleep happens AFTER the catch block (see below).
+            
         } catch (...) {
-            if (server_running) {
+            if (server_running) 
                 elog("Snapshot server: unknown accept error");
-                fc::usleep(fc::seconds(1));
-            }
+                // Fall through — sleep happens AFTER the catch block (see below).
         }
+        // Sleep OUTSIDE all catch blocks — fc::usleep yields the fiber and
+        // FC_ASSERT(current_exception == nullptr) fires on Windows if an exception
+        // is still in flight. By the time we reach here the exception is gone.
+        if (server_running)
+            fc::usleep(fc::seconds(1));
     }
 
     ilog("Snapshot server: accept loop exiting after ${n} connections", ("n", accept_count));

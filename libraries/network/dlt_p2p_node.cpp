@@ -3698,8 +3698,14 @@ void dlt_p2p_node::accept_loop() {
             return;
         } catch (const fc::exception& e) {
             elog("Error in accept loop: ${e}", ("e", e.to_detail_string()));
-            if (_running) fc::usleep(fc::seconds(1));
-        }
+            // NOTE: do NOT call fc::usleep here — fc::usleep yields the fiber and
+           // FC_ASSERT(current_exception == nullptr) fires if called while an
+            // exception is still active (Windows x64 SEH / ucrtbase abort).
+            // The sleep happens AFTER this catch block, below.
+         }
+        // Sleep OUTSIDE the catch block so no exception is active when we yield.
+        if (_running)
+            fc::usleep(fc::seconds(1));
     }
 }
 
