@@ -2,6 +2,11 @@
 project(VIZ)
 # Note: bcrypt (needed by boost::uuid / random on MinGW) is linked per-target
 # in the if(WIN32) block below to avoid polluting secp256k1 and other sub-targets.
+
+if(MINGW)
+  link_libraries(bcrypt)
+endif()
+
 cmake_minimum_required(VERSION 3.16)
 
 set(CHAIN_NAME "VIZ")
