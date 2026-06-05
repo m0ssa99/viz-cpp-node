@@ -618,6 +618,13 @@ Boost must be compiled with `context-impl=fcontext` explicitly.
 All commands below are run inside the **MSYS2 UCRT64** terminal
 (not MINGW64, not the plain MSYS terminal).
 
+### ⚠️ NTP Note
+To avoid issues related to time synchronization and NTP offsets, **do not use `w32tm`** (the default Windows time utility).  
+Instead, it is recommended to install and run **Meinberg NTP for Windows**, available here:  
+[https://www.meinbergglobal.com/english/sw/ntp.htm#ntp_stable](https://www.meinbergglobal.com/english/sw/ntp.htm#ntp_stable)
+
+Meinberg provides a full NTP service implementation compatible with Unix systems, ensuring more accurate and stable local clock synchronization — which is critical for running the blockchain node correctly.
+
 ### Step 1 — Install toolchain packages
 
 ```bash
@@ -808,7 +815,7 @@ If you see any `libstdc++`, `libgcc`, `libwinpthread`, or `msvcrt` entries,
   `configure.ac`, not the generated `configure` script. On Linux/macOS,
   the CMake ExternalProject autogen step handles this automatically. On
   Windows it must be run once manually before the first build.
-  
+
 ## Building on Other Platforms
 
 - The developers normally compile with GCC and Clang. These compilers should
