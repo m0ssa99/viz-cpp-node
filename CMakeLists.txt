@@ -5,8 +5,8 @@ project(VIZ)
 
 if(MINGW)
   link_libraries(bcrypt)
+  list(APPEND PLATFORM_SPECIFIC_LIBS bcrypt)
 endif()
-
 cmake_minimum_required(VERSION 3.16)
 
 set(CHAIN_NAME "VIZ")
@@ -140,6 +140,7 @@ if(WIN32)
         if(FULL_STATIC_BUILD)
             set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
         endif(FULL_STATIC_BUILD)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -lbcrypt")
         # bcrypt: needed by boost::random/uuid on MinGW (provides BCryptGenRandom)
         # Eliminăm adăugarea explicită a bcrypt la PLATFORM_SPECIFIC_LIBS, deoarece este acum link-at global
     endif(MSVC)
