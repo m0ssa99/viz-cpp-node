@@ -31,10 +31,10 @@ target_link_libraries(
         graphene::network_broadcast_api
         graphene::validator_api
         fc
-        ${readline_libraries}
+        ${READLINE_LIBRARIES}
         ${CMAKE_DL_LIBS}
-        ${PLATFORM_SPECIFIC_LIBS}
         ${Boost_LIBRARIES}
+        ${PLATFORM_SPECIFIC_LIBS}
 )
 
 if(MSVC)

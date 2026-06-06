@@ -47,6 +47,8 @@ list(APPEND BOOST_COMPONENTS thread
         unit_test_framework
         context
         locale
+        coroutine
+        regex
 )
 
 option(Boost_USE_STATIC_LIBS "Build with Boost static libraries usage" TRUE)
@@ -82,10 +84,6 @@ if(WIN32)
 endif(WIN32)
 
 find_package(Boost 1.71 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
-set(BOOST_LIBRARIES_TEMP ${Boost_LIBRARIES})
-find_package(Boost 1.71 REQUIRED COMPONENTS coroutine)
-list(APPEND BOOST_COMPONENTS coroutine)
-set(Boost_LIBRARIES ${BOOST_LIBRARIES_TEMP} ${Boost_LIBRARIES})
 
 find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
@@ -96,6 +94,7 @@ endif(CCACHE_FOUND)
 if(WIN32)
 
     message(STATUS "Configuring VIZ on WIN32")
+    set(PLATFORM_SPECIFIC_LIBS) # Păstrăm inițializarea pentru alte biblioteci
     set(DB_VERSION 60)
     set(BDB_STATIC_LIBS 1)
 
@@ -142,7 +141,7 @@ if(WIN32)
             set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
         endif(FULL_STATIC_BUILD)
         # bcrypt: needed by boost::random/uuid on MinGW (provides BCryptGenRandom)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lbcrypt")
+        # Eliminăm adăugarea explicită a bcrypt la PLATFORM_SPECIFIC_LIBS, deoarece este acum link-at global
     endif(MSVC)
 
 else(WIN32) # Apple AND Linux

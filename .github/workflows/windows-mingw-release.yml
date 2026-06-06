@@ -1,0 +1,198 @@
+name: Windows MinGW Release Build
+
+on:
+  push:
+    branches: [ win-build, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ win-build ]
+  workflow_dispatch:
+
+jobs:
+  build-windows-mingw:
+    name: Build vizd (MSYS2/MinGW UCRT64)
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      # -------------------------------------------------------
+      # 1. Checkout
+      # -------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # -------------------------------------------------------
+      # 2. Setup MSYS2
+      # -------------------------------------------------------
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-make
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-perl
+            mingw-w64-ucrt-x86_64-nasm
+            autoconf
+            automake
+            libtool
+            make
+            git
+            wget
+
+      # -------------------------------------------------------
+      # 3. Fix make alias
+      # -------------------------------------------------------
+      - name: Fix make alias
+        run: ln -sf /ucrt64/bin/mingw32-make.exe /usr/bin/make
+
+      # -------------------------------------------------------
+      # 4. Cache Boost
+      # -------------------------------------------------------
+      - name: Cache Boost
+        id: cache-boost
+        uses: actions/cache@v4
+        with:
+          path: C:\Boost
+          key: boost-1.84.0-mingw-ucrt64-static-v1
+
+      # -------------------------------------------------------
+      # 5. Build Boost 1.84 (static, fcontext)
+      # -------------------------------------------------------
+      - name: Build Boost 1.84
+        if: steps.cache-boost.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          wget -q https://archives.boost.io/release/1.84.0/source/boost_1_84_0.tar.bz2
+          tar xjf boost_1_84_0.tar.bz2
+          cd boost_1_84_0
+          ./bootstrap.sh --with-toolset=gcc
+          ./b2 -j4 \
+            toolset=gcc \
+            address-model=64 \
+            variant=release \
+            link=static \
+            threading=multi \
+            runtime-link=static \
+            context-impl=fcontext \
+            define=_WIN32_WINNT=0x0601 \
+            define=WINVER=0x0601 \
+            cxxflags="-march=x86-64 -mtune=generic" \
+            cflags="-march=x86-64 -mtune=generic" \
+            --with-atomic --with-chrono --with-context --with-coroutine \
+            --with-date_time --with-filesystem --with-iostreams --with-locale \
+            --with-program_options --with-regex --with-serialization \
+            --with-system --with-test --with-thread \
+            install --prefix=/c/Boost
+
+      # -------------------------------------------------------
+      # 6. Cache OpenSSL
+      # -------------------------------------------------------
+      - name: Cache OpenSSL
+        id: cache-openssl
+        uses: actions/cache@v4
+        with:
+          path: C:\OpenSSL
+          key: openssl-3.0.16-mingw-ucrt64-static-v1
+
+      # -------------------------------------------------------
+      # 7. Build OpenSSL 3.0 (static)
+      # -------------------------------------------------------
+      - name: Build OpenSSL 3.0.16
+        if: steps.cache-openssl.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          wget -q https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz
+          tar xzf openssl-3.0.16.tar.gz
+          cd openssl-3.0.16
+          /usr/bin/perl Configure mingw64 no-shared \
+            --prefix=/c/OpenSSL \
+            --openssldir=/c/OpenSSL/ssl \
+            -D_WIN32_WINNT=0x0601
+          make -j$(nproc)
+          make install_sw
+          make install_ssldirs
+          cp ./apps/openssl.cnf /c/OpenSSL/
+
+      # -------------------------------------------------------
+      # 8. Prepare secp256k1
+      # -------------------------------------------------------
+      - name: Autoreconf secp256k1-zkp
+        run: |
+          cd $GITHUB_WORKSPACE/thirdparty/fc/vendor/secp256k1-zkp
+          autoreconf -fi
+
+      # -------------------------------------------------------
+      # 9. Configure CMake
+      # -------------------------------------------------------
+      - name: CMake Configure
+        run: |
+          cd $GITHUB_WORKSPACE
+          mkdir -p build
+          cmake -G "MinGW Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_CXX_STANDARD=14 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DBOOST_ROOT="/c/Boost" \
+            -DBOOST_INCLUDEDIR="/c/Boost/include/boost-1_84" \
+            -DBOOST_LIBRARYDIR="/c/Boost/lib" \
+            -DBoost_NO_BOOST_CMAKE=ON \
+            -DBoost_NO_SYSTEM_PATHS=ON \
+            -DBoost_USE_STATIC_LIBS=ON \
+            -DBoost_USE_STATIC_RUNTIME=ON \
+            -DBoost_USE_MULTITHREADED=ON \
+            -DBoost_ARCHITECTURE="-x64" \
+            -DBoost_COMPILER="-mgw16" \
+            -DOPENSSL_ROOT_DIR="/c/OpenSSL" \
+            -DOPENSSL_USE_STATIC_LIBS=ON \
+            -DFULL_STATIC_BUILD=ON \
+            -DCMAKE_C_FLAGS="-DWINVER=0x0601 -DSECP256K1_STATIC" \
+            -DCMAKE_CXX_FLAGS="-DWINVER=0x0601 -DSECP256K1_STATIC -Wa,-mbig-obj" \
+            -DCMAKE_EXE_LINKER_FLAGS="-static -lbcrypt" \
+            -S . -B build
+
+      # -------------------------------------------------------
+      # 10. Build vizd
+      # -------------------------------------------------------
+      - name: Build vizd
+        run: |
+          cd $GITHUB_WORKSPACE/build
+          mingw32-make -j$(nproc) vizd
+
+      # -------------------------------------------------------
+      # 11. Verify binary
+      # -------------------------------------------------------
+      - name: Verify binary
+        run: |
+          ls -lh $GITHUB_WORKSPACE/build/programs/vizd/vizd.exe
+          file $GITHUB_WORKSPACE/build/programs/vizd/vizd.exe
+
+      # -------------------------------------------------------
+      # 12. Upload artifact
+      # -------------------------------------------------------
+      - name: Upload vizd.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: vizd-windows-mingw-${{ github.sha }}
+          path: build/programs/vizd/vizd.exe
+          retention-days: 30
+
+      # -------------------------------------------------------
+      # 13. Upload as Release (doar pe tag v*)
+      # -------------------------------------------------------
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/programs/vizd/vizd.exe
+          generate_release_notes: true
