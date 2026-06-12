@@ -1531,7 +1531,11 @@ void snapshot_plugin::plugin_impl::load_snapshot(const fc::path& input_path) {
         // After all removes, undo sessions are empty (objects are gone).
         // undo_all() here is now a true no-op on all platforms — nothing
         // remains in the undo log to revert.
-        db.undo_all();
+        //db.undo_all();
+        
+        if (db.revision() > 0) {
+            db.commit(db.revision());   // commit permanent, fără revert
+        }
 
         // CRITICAL - singleton objects (modify existing)
         if (state.contains("dynamic_global_property")) {
