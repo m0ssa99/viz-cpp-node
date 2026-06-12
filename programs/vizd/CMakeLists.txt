@@ -37,6 +37,7 @@ target_link_libraries(
         graphene::snapshot
         graphene::validator_guard
         graphene_protocol
+        graphene::private_message
         fc
         ${CMAKE_DL_LIBS}
         ${PLATFORM_SPECIFIC_LIBS}
